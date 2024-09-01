@@ -1,70 +1,121 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import * as MediaLibrary from 'expo-media-library';
+import { useEffect, useState, useRef } from 'react';
+import { StyleSheet, View, Text, Button, TouchableOpacity } from 'react-native';
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [cameraHasPermission, setCameraHasPermission] = useCameraPermissions();
+  const [mediaLibHasPermission, setMediaLibHasPermission] = useState(false);
+  const cameraRef = useRef<CameraView | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const mediaLibPermission = await MediaLibrary.requestPermissionsAsync();
+      setMediaLibHasPermission(mediaLibPermission.status === 'granted');
+    })();
+  }, []);
+
+  if (!cameraHasPermission) {
+    return (
+      <View>
+        <Text>No camera permission</Text>
+      </View>
+    );
+  }
+
+  if (!mediaLibHasPermission) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>
+          Permissions required for media library access
+        </Text>
+        <Button
+          onPress={() => {
+            MediaLibrary.requestPermissionsAsync().then(({ status }) =>
+              setMediaLibHasPermission(status === 'granted')
+            );
+          }}
+          title="Grant Media Permissions"
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({ ios: 'cmd + d', android: 'cmd + m' })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      </View>
+    );
+  }
+
+  if (!cameraHasPermission.granted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>Camera permission required</Text>
+        <Button onPress={setCameraHasPermission} title="grant permission" />
+      </View>
+    );
+  }
+
+  const takePic = async () => {
+    if (!cameraRef.current) {
+      console.log('cameraRef null');
+      return;
+    }
+    try {
+      const photo = await cameraRef.current.takePictureAsync();
+      console.log('photo taken', photo?.uri);
+      if (!photo) {
+        console.error('Error:can not save image');
+        return;
+      }
+      const asset = await MediaLibrary.createAssetAsync(photo!.uri);
+      console.log('Success', asset);
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
+  const toggleCamera = () => {
+    setFacing((current) => (current === 'back' ? 'front' : 'back'));
+  };
+
+  return (
+    <View style={styles.container}>
+      <CameraView ref={cameraRef} style={styles.camera}>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.button} onPress={toggleCamera}>
+            <Text style={styles.text}>Flip Camera</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.button} onPress={takePic}>
+            <Text style={styles.text}>Take Picture</Text>
+          </TouchableOpacity>
+        </View>
+      </CameraView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  message: {
+    textAlign: 'center',
+    paddingBottom: 10,
+  },
+  camera: {
+    flex: 1,
+  },
+  buttonContainer: {
+    flex: 1,
     flexDirection: 'row',
+    backgroundColor: 'transparent',
+    margin: 64,
+  },
+  button: {
+    flex: 1,
+    alignSelf: 'flex-end',
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  text: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
   },
 });
